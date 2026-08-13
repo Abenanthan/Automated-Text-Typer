@@ -14,8 +14,7 @@ Requires Chrome/Edge 111+ (the `world: "MAIN"` content script).
 
 ## Use
 
-Paste code into the popup, set the speed, hit **Start typing**, then click into the
-target editor during the countdown.
+Paste code into the popup, set the speed, hit **Start typing**, then click into the target editor during the countdown.
 
 | | |
 |---|---|
