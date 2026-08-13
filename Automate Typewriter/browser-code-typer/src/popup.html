@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>Code Typer</h1>
+    <span id="target" class="target">detecting…</span>
+  </header>
+
+  <textarea id="snippet" spellcheck="false" placeholder="Paste the code to type…"></textarea>
+
+  <div class="controls">
+    <label class="ctl">
+      <span>Speed <b id="wpmOut"></b> wpm</span>
+      <input id="wpm" type="range" min="60" max="900" step="10">
+    </label>
+
+    <label class="ctl">
+      <span>Variation <b id="jitterOut"></b>%</span>
+      <input id="jitter" type="range" min="0" max="80" step="5">
+    </label>
+
+    <label class="ctl">
+      <span>Start delay <b id="delayOut"></b>s</span>
+      <input id="delay" type="range" min="0" max="10" step="1">
+    </label>
+
+    <label class="check">
+      <input id="chunkIndent" type="checkbox">
+      <span>Insert indentation in one step</span>
+    </label>
+  </div>
+
+  <button id="start">Start typing</button>
+  <p class="hint">Click into the editor during the countdown.<br>Esc stops &middot; Alt+Shift+P pauses &middot; Alt+Shift+T replays.</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

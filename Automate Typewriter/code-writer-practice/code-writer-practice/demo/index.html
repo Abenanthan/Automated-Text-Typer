@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Code Writer Practice IDE</title>
+  <style>
+    body { margin:0; font-family:Arial,sans-serif; background:#1e1e1e; color:#ddd; }
+    header { padding:14px 18px; background:#252526; border-bottom:1px solid #444; }
+    .layout { display:flex; height:calc(100vh - 52px); }
+    aside { width:220px; background:#252526; padding:16px; box-sizing:border-box; }
+    main { flex:1; padding:18px; box-sizing:border-box; }
+    textarea { width:100%; height:75%; resize:none; box-sizing:border-box; background:#1e1e1e;
+      color:#d4d4d4; border:1px solid #555; padding:16px; font:14px Consolas,monospace; }
+    button { padding:9px 14px; margin-right:8px; cursor:pointer; }
+    .file { padding:8px; cursor:pointer; }
+    .file.active { background:#37373d; }
+    #status { margin-top:10px; color:#8bd17c; }
+  </style>
+</head>
+<body>
+<header>Code Writer Practice IDE</header>
+<div class="layout">
+  <aside>
+    <div class="file active">index.html</div>
+    <div class="file">script.js</div>
+    <div class="file">style.css</div>
+  </aside>
+  <main>
+    <h3>index.html</h3>
+    <textarea id="editor" spellcheck="false"></textarea>
+    <br><br>
+    <button id="save">Save Code</button>
+    <button id="clear">Clear</button>
+    <div id="status">Ready</div>
+  </main>
+</div>
+<script>
+const editor = document.getElementById("editor");
+const status = document.getElementById("status");
+editor.value = localStorage.getItem("practice-code") || "";
+
+document.getElementById("save").onclick = () => {
+  localStorage.setItem("practice-code", editor.value);
+  status.textContent = "Saved";
+};
+
+document.getElementById("clear").onclick = () => {
+  editor.value = "";
+  status.textContent = "Cleared";
+};
+</script>
+</body>
+</html>

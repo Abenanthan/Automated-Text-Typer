@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Code Writer — Project Practice IDE</title>
+  <style>
+    html,body{height:100%;margin:0;overflow:hidden;font-family:Segoe UI,Arial,sans-serif;background:#1e1e1e;color:#ddd}
+    header{height:48px;display:flex;align-items:center;padding:0 16px;box-sizing:border-box;background:#252526;border-bottom:1px solid #3b3b3b}
+    .brand{font-weight:600}.badge{margin-left:12px;font-size:11px;padding:3px 7px;border:1px solid #555;border-radius:10px;color:#aaa}
+    .layout{display:flex;height:calc(100vh - 48px)}
+    aside{width:230px;background:#181818;border-right:1px solid #333;overflow:auto}
+    .side-title{padding:12px 14px;font-size:11px;letter-spacing:.08em;color:#999}
+    .file{padding:7px 16px;cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .file:hover{background:#2a2d2e}.file.active{background:#37373d;color:#fff}
+    main{flex:1;min-width:0;display:flex;flex-direction:column}
+    .tabs{height:38px;display:flex;background:#252526;border-bottom:1px solid #333;overflow:auto}
+    .tab{min-width:120px;padding:10px 14px;box-sizing:border-box;border-right:1px solid #333;font-size:12px;cursor:pointer;white-space:nowrap}
+    .tab.active{background:#1e1e1e;color:#fff}
+    #editor{flex:1;min-height:0}.status{height:34px;display:flex;align-items:center;gap:18px;padding:0 14px;background:#007acc;color:white;font-size:12px}
+  </style>
+</head>
+<body>
+<header><div class="brand">Code Writer Practice IDE</div><div class="badge">LOCAL PRACTICE · PHASE 3</div></header>
+<div class="layout">
+  <aside><div class="side-title">EXPLORER</div><div id="files"></div></aside>
+  <main><div class="tabs" id="tabs"></div><div id="editor"></div>
+    <div class="status"><span id="current">index.html</span><span id="state">Ready</span><span id="count"></span></div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"></script>
+<script>
+require.config({paths:{vs:"https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs"}});
+const files = {
+  "index.html": {language:"html",value:""},
+  "script.js": {language:"javascript",value:""},
+  "style.css": {language:"css",value:""},
+  "README.md": {language:"markdown",value:"# Practice Project\\n"}
+};
+let activeFile="index.html", editor, models={};
+const filesEl=document.getElementById("files"),tabsEl=document.getElementById("tabs");
+const currentEl=document.getElementById("current"),stateEl=document.getElementById("state"),countEl=document.getElementById("count");
+const langMap={js:"javascript",mjs:"javascript",cjs:"javascript",ts:"typescript",tsx:"typescript",jsx:"javascript",
+html:"html",htm:"html",css:"css",scss:"scss",json:"json",md:"markdown",py:"python",java:"java",c:"c",cpp:"cpp",h:"cpp",
+hpp:"cpp",cs:"csharp",php:"php",sql:"sql",xml:"xml",yaml:"yaml",yml:"yaml",sh:"shell",bat:"bat",txt:"plaintext"};
+
+function languageFor(name){
+  const base=name.split("/").pop(), i=base.lastIndexOf(".");
+  return i<0 ? "plaintext" : (langMap[base.slice(i+1).toLowerCase()] || "plaintext");
+}
+function setState(t){stateEl.textContent=t}
+function render(){
+  filesEl.innerHTML=""; tabsEl.innerHTML="";
+  Object.keys(models).forEach(name=>{
+    const f=document.createElement("div"); f.className="file"+(name===activeFile?" active":"");
+    f.textContent=name; f.dataset.file=name; f.onclick=()=>openFile(name); filesEl.appendChild(f);
+    const t=document.createElement("div"); t.className="tab"+(name===activeFile?" active":"");
+    t.textContent=name; t.dataset.file=name; t.onclick=()=>openFile(name); tabsEl.appendChild(t);
+  });
+  countEl.textContent=`${Object.keys(models).length} files`;
+}
+function openFile(name){
+  if(!models[name]) return false;
+  activeFile=name; editor.setModel(models[name]); currentEl.textContent=name; render(); setState("Opened "+name);
+  return true;
+}
+function ensureFile(name,value=""){
+  if(models[name]){
+    models[name].setValue(value);
+    return true;
+  }
+  models[name]=monaco.editor.createModel(value,languageFor(name),monaco.Uri.parse("file:///"+encodeURI(name)));
+  render();
+  return true;
+}
+function setFile(name,value){
+  ensureFile(name,value); openFile(name); setState("Written "+name); return true;
+}
+require(["vs/editor/editor.main"],function(){
+  Object.entries(files).forEach(([name,cfg])=>{
+    models[name]=monaco.editor.createModel(cfg.value,cfg.language,monaco.Uri.parse("file:///"+encodeURI(name)));
+  });
+  editor=monaco.editor.create(document.getElementById("editor"),{
+    model:models[activeFile],theme:"vs-dark",automaticLayout:true,minimap:{enabled:false},
+    fontSize:14,tabSize:2,wordWrap:"off"
+  });
+  editor.onDidChangeModelContent(()=>setState("Modified"));
+  render();
+  window.codeWriterDemo={
+    getFiles:()=>Object.fromEntries(Object.entries(models).map(([k,m])=>[k,m.getValue()])),
+    getActiveFile:()=>activeFile,
+    openFile,ensureFile,setFile
+  };
+  setState("Ready");
+});
+</script>
+
+<script>
+window.addEventListener("code-writer:project",async e=>{
+  const project=e.detail?.files||[];
+  const started=Date.now();
+  while(!window.codeWriterDemo && Date.now()-started<12000) await new Promise(r=>setTimeout(r,100));
+  if(!window.codeWriterDemo){
+    window.dispatchEvent(new CustomEvent("code-writer:result",{detail:{ok:false,reason:"Monaco is not ready."}}));
+    return;
+  }
+  let done=0, failed=[];
+  for(const item of project){
+    try{
+      window.codeWriterDemo.setFile(item.path,item.content);
+      done++;
+    }catch(err){failed.push({path:item.path,error:String(err)})}
+  }
+  const first=project[0]?.path;
+  if(first) window.codeWriterDemo.openFile(first);
+  window.dispatchEvent(new CustomEvent("code-writer:result",{detail:{
+    ok:failed.length===0,done,total:project.length,failed
+  }}));
+});
+</script>
+</body>
+</html>

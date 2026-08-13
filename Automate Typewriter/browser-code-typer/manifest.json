@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Code Typer",
+  "version": "1.0.0",
+  "description": "Types a code snippet character-by-character into any editor on the page — Monaco, CodeMirror, Ace, textareas and contenteditable.",
+  "permissions": ["storage"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "src/background.js" },
+  "action": { "default_popup": "src/popup.html", "default_title": "Code Typer" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/engine.js"],
+      "world": "MAIN",
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content.js"],
+      "world": "ISOLATED",
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "commands": {
+    "start-typing": {
+      "suggested_key": { "default": "Alt+Shift+T" },
+      "description": "Type the saved snippet into the focused editor"
+    },
+    "toggle-pause": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Pause / resume typing"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Code Writer Phase 5</title><style>
+body{margin:0;background:#1e1e1e;color:#ddd;font-family:Arial}.top{height:50px;background:#252526;padding:10px;box-sizing:border-box}.main{padding:15px}.editor{height:65vh;width:100%;box-sizing:border-box}button{padding:6px;margin-right:5px}textarea{background:#1e1e1e;color:#ddd;font:14px monospace}#monaco,#cm{height:65vh;border:1px solid #555}#status{margin-top:8px;color:#8bd17c}
+</style></head><body><div class="top"><b>Code Writer Phase 5 — Local Practice IDE</b> <button onclick="switchMode('monaco')">Monaco</button><button onclick="switchMode('textarea')">Textarea</button><button onclick="switchMode('cm')">CodeMirror</button></div><div class="main"><p>Editor: <span id="mode">Monaco</span> | File: <span id="file">index.html</span></p><div id="monaco"></div><textarea id="textarea" class="editor" style="display:none"></textarea><div id="cm" style="display:none"></div><div id="status">Ready</div></div>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"></script><script>
+let mode='monaco',active='index.html',monacoEditor,cmEditor;const data={'index.html':'','script.js':'','style.css':''};
+require.config({paths:{vs:'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'}});
+require(['vs/editor/editor.main'],()=>{monacoEditor=monaco.editor.create(document.getElementById('monaco'),{theme:'vs-dark',automaticLayout:true,minimap:{enabled:false}})});
+function value(){if(mode==='monaco')return monacoEditor?.getValue()||'';if(mode==='textarea')return textarea.value;return cmEditor?.getValue()||''}
+function put(v){if(mode==='monaco')monacoEditor?.setValue(v);else if(mode==='textarea')textarea.value=v;else cmEditor?.setValue(v)}
+function switchMode(m){data[active]=value();mode=m;['monaco','textarea','cm'].forEach(x=>document.getElementById(x).style.display='none');document.getElementById(m).style.display='block';document.getElementById('mode').textContent=m==='cm'?'CodeMirror':m[0].toUpperCase()+m.slice(1);put(data[active])}
+window.codeWriterPractice={getEditorInfo:()=>({mode,activeFile:active}),setCode:c=>{put(c);data[active]=c;document.getElementById('status').textContent='Code written';return true}};
+window.addEventListener('code-writer:write',e=>{if(e.detail.file&&!data.hasOwnProperty(e.detail.file))data[e.detail.file]='';active=e.detail.file;document.getElementById('file').textContent=active;window.codeWriterPractice.setCode(e.detail.code||'');window.dispatchEvent(new CustomEvent('code-writer:result',{detail:{ok:true,file:active,editor:mode}}))});
+let s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.min.js';s.onload=()=>{cmEditor=CodeMirror(document.getElementById('cm'),{lineNumbers:true});};document.head.appendChild(s);
+</script>
+<script>
+window.addEventListener("message", (event) => {
+  if (event.source !== window) return;
+  const msg = event.data;
+  if (!msg || msg.source !== "code-writer-extension") return;
+
+  if (msg.type === "DETECT") {
+    const info = window.codeWriterPractice?.getEditorInfo?.();
+    window.postMessage({
+      source: "code-writer-page",
+      requestId: msg.requestId,
+      type: "DETECT_RESULT",
+      result: info ? {supported:true, type:info.mode, file:info.activeFile} : {supported:false}
+    }, "*");
+  }
+
+  if (msg.type === "WRITE") {
+    const info = window.codeWriterPractice?.getEditorInfo?.();
+    if (!window.codeWriterPractice || !info) {
+      window.postMessage({
+        source:"code-writer-page", requestId:msg.requestId,
+        type:"WRITE_RESULT", result:{ok:false, reason:"Page adapter unavailable."}
+      }, "*");
+      return;
+    }
+    try {
+      if (msg.file && info.activeFile !== msg.file) {
+        // The demo exposes openFile in some versions.
+        window.codeWriterPractice.openFile?.(msg.file);
+      }
+      const ok = window.codeWriterPractice.setCode(msg.code || "");
+      const latest = window.codeWriterPractice.getEditorInfo?.() || info;
+      window.postMessage({
+        source:"code-writer-page", requestId:msg.requestId,
+        type:"WRITE_RESULT",
+        result:{ok:!!ok, file:latest.activeFile || msg.file, editor:latest.mode || info.mode}
+      }, "*");
+    } catch (e) {
+      window.postMessage({
+        source:"code-writer-page", requestId:msg.requestId,
+        type:"WRITE_RESULT", result:{ok:false, reason:String(e)}
+      }, "*");
+    }
+  }
+});
+</script>
+</body></html>

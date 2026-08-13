@@ -1,0 +1,178 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Code Writer — Monaco Practice IDE</title>
+  <style>
+    html,body { height:100%; margin:0; overflow:hidden; font-family:Segoe UI,Arial,sans-serif; background:#1e1e1e; color:#ddd; }
+    header { height:48px; display:flex; align-items:center; padding:0 16px; box-sizing:border-box; background:#252526; border-bottom:1px solid #3b3b3b; }
+    .brand { font-weight:600; }
+    .badge { margin-left:12px; font-size:11px; padding:3px 7px; border:1px solid #555; border-radius:10px; color:#aaa; }
+    .layout { display:flex; height:calc(100vh - 48px); }
+    aside { width:220px; background:#181818; border-right:1px solid #333; }
+    .side-title { padding:12px 14px; font-size:11px; letter-spacing:.08em; color:#999; }
+    .file { padding:8px 16px; cursor:pointer; font-size:13px; }
+    .file:hover { background:#2a2d2e; }
+    .file.active { background:#37373d; color:#fff; }
+    main { flex:1; min-width:0; display:flex; flex-direction:column; }
+    .tabs { height:38px; display:flex; background:#252526; border-bottom:1px solid #333; }
+    .tab { min-width:120px; padding:10px 14px; box-sizing:border-box; border-right:1px solid #333; font-size:12px; cursor:pointer; }
+    .tab.active { background:#1e1e1e; color:#fff; }
+    #editor { flex:1; min-height:0; }
+    .status { height:34px; display:flex; align-items:center; gap:16px; padding:0 14px; background:#007acc; color:white; font-size:12px; }
+    .status span { opacity:.95; }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">Code Writer Practice IDE</div>
+  <div class="badge">LOCAL PRACTICE</div>
+</header>
+<div class="layout">
+  <aside>
+    <div class="side-title">EXPLORER</div>
+    <div id="files"></div>
+  </aside>
+  <main>
+    <div class="tabs" id="tabs"></div>
+    <div id="editor"></div>
+    <div class="status">
+      <span id="current">index.html</span>
+      <span id="state">Ready</span>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.min.js"></script>
+<script>
+require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" } });
+
+const files = {
+  "index.html": { language: "html", value: "" },
+  "script.js": { language: "javascript", value: "" },
+  "style.css": { language: "css", value: "" },
+  "README.md": { language: "markdown", value: "# Practice Project\\n" }
+};
+let activeFile = "index.html";
+let editor, models = {};
+
+const filesEl = document.getElementById("files");
+const tabsEl = document.getElementById("tabs");
+const currentEl = document.getElementById("current");
+const stateEl = document.getElementById("state");
+
+function setState(text) { stateEl.textContent = text; }
+
+function renderFiles() {
+  filesEl.innerHTML = "";
+  Object.keys(files).forEach(name => {
+    const el = document.createElement("div");
+    el.className = "file" + (name === activeFile ? " active" : "");
+    el.textContent = name;
+    el.dataset.file = name;
+    el.onclick = () => openFile(name);
+    filesEl.appendChild(el);
+  });
+}
+
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  Object.keys(files).forEach(name => {
+    const el = document.createElement("div");
+    el.className = "tab" + (name === activeFile ? " active" : "");
+    el.textContent = name;
+    el.dataset.file = name;
+    el.onclick = () => openFile(name);
+    tabsEl.appendChild(el);
+  });
+}
+
+function openFile(name) {
+  activeFile = name;
+  editor.setModel(models[name]);
+  currentEl.textContent = name;
+  renderFiles();
+  renderTabs();
+  setState("Opened " + name);
+  window.dispatchEvent(new CustomEvent("code-writer:file-opened", {detail:{file:name}}));
+}
+
+require(["vs/editor/editor.main"], function() {
+  Object.entries(files).forEach(([name, cfg]) => {
+    models[name] = monaco.editor.createModel(cfg.value, cfg.language, monaco.Uri.parse("file:///" + name));
+  });
+
+  editor = monaco.editor.create(document.getElementById("editor"), {
+    model: models[activeFile],
+    theme: "vs-dark",
+    automaticLayout: true,
+    minimap: { enabled: false },
+    fontSize: 14,
+    tabSize: 2,
+    wordWrap: "off"
+  });
+
+  editor.onDidChangeModelContent(() => {
+    setState("Modified");
+  });
+
+  renderFiles();
+  renderTabs();
+  setState("Ready");
+  window.codeWriterDemo = {
+    getActiveFile: () => activeFile,
+    getFiles: () => Object.fromEntries(Object.entries(models).map(([k,m]) => [k,m.getValue()])),
+    openFile: (name) => { if (models[name]) { openFile(name); return true; } return false; },
+    setFile: (name, value) => {
+      if (!models[name]) return false;
+      models[name].setValue(value);
+      return true;
+    }
+  };
+});
+</script>
+
+<script>
+/*
+  Code Writer page bridge.
+  This runs in the page context, so it has access to Monaco models.
+  The extension communicates through a DOM CustomEvent.
+*/
+window.addEventListener("code-writer:set-file", async (event) => {
+  const detail = event.detail || {};
+  const file = detail.file;
+  const code = detail.code;
+
+  if (!file || typeof code !== "string") return;
+
+  const started = Date.now();
+  while (!window.codeWriterDemo && Date.now() - started < 10000) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  if (!window.codeWriterDemo) {
+    window.dispatchEvent(new CustomEvent("code-writer:result", {
+      detail: { ok:false, reason:"Monaco is not ready." }
+    }));
+    return;
+  }
+
+  const ok = window.codeWriterDemo.setFile(file, code);
+  if (ok) {
+    // Open the target file after updating its model.
+    window.codeWriterDemo.openFile?.(file);
+  }
+
+  window.dispatchEvent(new CustomEvent("code-writer:result", {
+    detail: {
+      ok,
+      file,
+      reason: ok ? "" : `File ${file} was not found.`
+    }
+  }));
+});
+</script>
+
+</body>
+</html>

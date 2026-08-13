@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Code Writer Practice - Multi File",
+  "version": "0.2.1",
+  "description": "Writes supplied code into the local Monaco practice IDE.",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
