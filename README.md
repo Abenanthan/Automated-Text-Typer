@@ -1,6 +1,6 @@
 # Code Typer
 
-A Chrome/Edge extension (Manifest V3) that types a snippet into whatever editor is
+A Chrome/Edge extension that types a snippet into whatever editor is
 focused on the page, character by character, at a configurable speed. Built for
 recording screencasts and walkthroughs where a paste looks wrong.
 
