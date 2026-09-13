@@ -225,7 +225,23 @@
     return Math.max(0, ms * spread);
   }
 
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  // Chrome clamps timers in a hidden tab to once a second (once a minute after
+  // five minutes), which stalls a run as soon as the user switches tabs. While
+  // hidden, borrow the extension service worker's clock instead — its timers
+  // aren't tied to this page's visibility.
+  let clockSeq = 0;
+  const clockWaits = new Map();
+
+  const sleep = ms => new Promise(resolve => {
+    if (!document.hidden || ms <= 0) { setTimeout(resolve, ms); return; }
+    const id = ++clockSeq;
+    const done = () => { clockWaits.delete(id); resolve(); };
+    clockWaits.set(id, done);
+    // Safety net in case the worker never answers (extension reloaded, port
+    // dropped): the throttled local timer still ends the wait eventually.
+    setTimeout(() => clockWaits.get(id)?.(), ms + 1500);
+    window.postMessage({ source: FROM_ENGINE, type: 'clock', id, ms }, '*');
+  });
 
   // ------------------------------------------------------------------- state
 
@@ -324,6 +340,9 @@
         break;
       case 'stop':
         if (run) run.cancelled = true;
+        break;
+      case 'clock-tick':
+        clockWaits.get(msg.id)?.();
         break;
     }
   });

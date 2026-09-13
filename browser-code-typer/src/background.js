@@ -11,8 +11,13 @@ const DEFAULTS = { wpm: 380, jitter: 0.35, chunkIndent: true, startDelayMs: 3000
 /** tabId -> { claimed: boolean, timer: number } */
 const runs = new Map();
 
+/** tabId -> frameId the user last focused */
+const lastFocusedFrame = new Map();
+
 const toFrame0 = (tabId, msg) =>
   chrome.tabs.sendMessage(tabId, msg, { frameId: 0 }).catch(() => {});
+const toFrame = (tabId, frameId, msg) =>
+  chrome.tabs.sendMessage(tabId, msg, { frameId }).catch(() => toFrame0(tabId, msg));
 const toAllFrames = (tabId, msg) =>
   chrome.tabs.sendMessage(tabId, msg).catch(() => {});
 
@@ -34,12 +39,13 @@ async function startRun(tabId, text, opts) {
   toFrame0(tabId, { type: 'CCT_HUD', label: 'Typing', typed: 0, total: text.length });
   toAllFrames(tabId, { type: 'CCT_TRY', text, opts: o });
 
-  // If no frame reported focus, fall back to the top frame.
+  // If no frame holds focus (e.g. the user switched to another tab during the
+  // countdown), hand the run to the frame they last focused, else the top frame.
   const run = runs.get(tabId);
   if (!run) return;
   run.timer = setTimeout(() => {
     if (!runs.get(tabId)?.claimed) {
-      toFrame0(tabId, { type: 'CCT_TRY_FORCE', text, opts: o });
+      toFrame(tabId, lastFocusedFrame.get(tabId) ?? 0, { type: 'CCT_TRY_FORCE', text, opts: o });
     }
   }, 400);
 }
@@ -58,6 +64,10 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
       if (run) run.claimed = true;
       break;
     }
+
+    case 'CCT_FOCUS':
+      lastFocusedFrame.set(tabId, sender.frameId ?? 0);
+      break;
 
     case 'CCT_STOP':
       toAllFrames(tabId, { type: 'CCT_STOP_FRAME' });
@@ -112,4 +122,18 @@ chrome.commands.onCommand.addListener(async command => {
   }
 });
 
-chrome.tabs.onRemoved.addListener(tabId => runs.delete(tabId));
+// Pages in a hidden tab have their timers throttled; the engine borrows this
+// clock instead. An open port also keeps the worker alive for the whole run.
+chrome.runtime.onConnect.addListener(port => {
+  if (port.name !== 'cct-clock') return;
+  port.onMessage.addListener(({ id, ms }) => {
+    setTimeout(() => {
+      try { port.postMessage({ id }); } catch (_) { /* tab navigated away */ }
+    }, ms);
+  });
+});
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  runs.delete(tabId);
+  lastFocusedFrame.delete(tabId);
+});

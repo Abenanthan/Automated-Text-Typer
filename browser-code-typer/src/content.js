@@ -73,11 +73,30 @@
 
   let pendingProbe = null;
 
+  // Timers in this frame are throttled while the tab is hidden, so the engine's
+  // between-keystroke waits are timed by the service worker over a port.
+  let clockPort = null;
+
+  function clock(id, ms) {
+    try {
+      if (!clockPort) {
+        clockPort = chrome.runtime.connect({ name: 'cct-clock' });
+        clockPort.onMessage.addListener(m => toEngine({ type: 'clock-tick', id: m.id }));
+        clockPort.onDisconnect.addListener(() => { clockPort = null; });
+      }
+      clockPort.postMessage({ id, ms });
+    } catch (_) {
+      // Extension context gone — the engine's own fallback timer takes over.
+      clockPort = null;
+    }
+  }
+
   window.addEventListener('message', ev => {
     if (ev.source !== window) return;
     const m = ev.data;
     if (!m || m.source !== FROM_ENGINE) return;
     if (m.type === 'ready') return;
+    if (m.type === 'clock') { clock(m.id, m.ms); return; }
     if (m.type === 'probe-result') {
       pendingProbe?.(m);
       pendingProbe = null;
@@ -89,6 +108,13 @@
   document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape') stopAll();
   }, true);
+
+  // Tell the worker which frame the user last clicked into, so a run started
+  // after they've switched tabs still lands in the right (possibly nested) frame.
+  const reportFocus = () =>
+    chrome.runtime.sendMessage({ type: 'CCT_FOCUS' }).catch(() => {});
+  window.addEventListener('focus', reportFocus);
+  if (document.hasFocus()) reportFocus();
 
   // ---------------------------------------------------------- from background
 

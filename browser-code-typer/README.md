@@ -58,8 +58,16 @@ assignment and revert on the next render.
 Editors on LeetCode and HackerRank often live in an iframe, so the content script
 runs in all frames. A run is broadcast to every frame and the one holding focus
 claims it ([src/background.js](src/background.js)); if none does within 400 ms, the
-top frame takes it and the engine falls back to the first visible editor. The
-progress HUD always renders in frame 0.
+frame the user last focused takes it (or the top frame), and the engine falls back
+to the first visible editor. The progress HUD always renders in frame 0.
+
+## Background tabs
+
+Chrome throttles timers in hidden tabs to once per second, which would stall a run
+when you switch away. While the tab is hidden, the engine times its per-keystroke
+waits through the service worker over a `cct-clock` port, so typing continues at
+full speed. Editors like Monaco may not repaint until you return, but the text is
+already in the document.
 
 ## Tuning
 
